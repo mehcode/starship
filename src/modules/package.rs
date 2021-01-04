@@ -172,6 +172,26 @@ fn extract_meson_version(file_contents: &str) -> Option<String> {
     Some(formatted_version)
 }
 
+fn extract_pub_version(file_contents: &str) -> Option<String> {
+    let file = yaml_rust::YamlLoader::load_from_str(file_contents).ok()?;
+    let doc = file.first()?;
+    let version = doc["version"].as_str()?;
+
+    // https://dart.dev/tools/pub/pubspec#publish_to
+    // an explicit "publish_to: none" marks a package as private
+    let is_private = doc["publish_to"]
+        .as_str()
+        .map(|to| to == "none")
+        .unwrap_or(false);
+
+    if is_private {
+        // a private package doesn't have a meaningful version
+        return None;
+    }
+
+    Some(format_version(version))
+}
+
 fn get_package_version(base_dir: &PathBuf, config: &PackageConfig) -> Option<String> {
     if let Ok(cargo_toml) = utils::read_file(base_dir.join("Cargo.toml")) {
         extract_cargo_version(&cargo_toml)
@@ -193,6 +213,8 @@ fn get_package_version(base_dir: &PathBuf, config: &PackageConfig) -> Option<Str
         extract_maven_version(&pom_file)
     } else if let Ok(meson_build) = utils::read_file(base_dir.join("meson.build")) {
         extract_meson_version(&meson_build)
+    } else if let Ok(pubspec_yaml) = utils::read_file(base_dir.join("pubspec.yaml")) {
+        extract_pub_version(&pubspec_yaml)
     } else {
         None
     }
